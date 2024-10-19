@@ -5,13 +5,11 @@
 
 mod state;
 
-use self::state::Application;
-use linera_sdk::{base::WithServiceAbi, views::View, Service, ServiceRuntime};
+use async_graphql::{connection::EmptyFields, EmptyMutation, EmptySubscription, Schema};
+use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime};
 
-pub struct ApplicationService {
-    state: Application,
-    runtime: ServiceRuntime<Self>,
-}
+#[derive(Clone)]
+pub struct ApplicationService;
 
 linera_sdk::service!(ApplicationService);
 
@@ -22,14 +20,14 @@ impl WithServiceAbi for ApplicationService {
 impl Service for ApplicationService {
     type Parameters = ();
 
-    async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = Application::load(runtime.root_view_storage_context())
-            .await
-            .expect("Failed to load state");
-        ApplicationService { state, runtime }
+    async fn new(_runtime: ServiceRuntime<Self>) -> Self {
+        ApplicationService
     }
 
-    async fn handle_query(&self, _query: Self::Query) -> Self::QueryResponse {
-        panic!("Queries not supported by application");
+    async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse {
+        Schema::build(EmptyFields, EmptyMutation, EmptySubscription)
+            .finish()
+            .execute(query)
+            .await
     }
 }
