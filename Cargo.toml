@@ -7,6 +7,7 @@ edition = "2021"
 async-graphql = { version = "=7.0.2", default-features = false }
 async-graphql-derive = { version = "=7.0.2", default-features = false }
 linera-sdk = { git = "https://github.com/jvff/linera-protocol", rev = "26a5299" }
+serde = { version = "1.0.217", features = ["derive"] }
 
 [dev-dependencies]
 linera-sdk = { git = "https://github.com/jvff/linera-protocol", rev = "26a5299", features = ["test"] }

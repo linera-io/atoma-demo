@@ -264,6 +264,7 @@ dependencies = [
  "async-graphql",
  "async-graphql-derive",
  "linera-sdk",
+ "serde",
 ]
 
 [[package]]
