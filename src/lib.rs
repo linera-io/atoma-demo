@@ -7,13 +7,20 @@ use serde::{Deserialize, Serialize};
 pub struct ApplicationAbi;
 
 impl ContractAbi for ApplicationAbi {
-    type Operation = ();
+    type Operation = Operation;
     type Response = ();
 }
 
 impl ServiceAbi for ApplicationAbi {
     type Query = ();
     type QueryResponse = ();
+}
+
+/// Operations that the contract can execute.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum Operation {
+    /// Log an interaction with the AI.
+    LogChatInteraction { interaction: ChatInteraction },
 }
 
 /// A single interaction with the AI chat.
