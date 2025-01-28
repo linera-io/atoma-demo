@@ -25,6 +25,7 @@ pub enum Operation {
 
 /// A single interaction with the AI chat.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, async_graphql::SimpleObject)]
+#[cfg_attr(feature = "test", derive(test_strategy::Arbitrary))]
 pub struct ChatInteraction {
     pub prompt: String,
     pub response: String,

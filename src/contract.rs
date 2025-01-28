@@ -4,6 +4,9 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 mod state;
+#[cfg(test)]
+#[path = "./contract_unit_tests.rs"]
+mod tests;
 
 use atoma_demo::{ChatInteraction, Operation};
 use linera_sdk::{
