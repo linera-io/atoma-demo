@@ -138,3 +138,42 @@ pub struct ChatCompletionResponse {
 pub struct ChatCompletionChoice {
     message: ChatMessage,
 }
+
+/// Only the response for a [`ChatInteraction`].
+#[derive(Clone, Debug)]
+pub struct ChatInteractionResponse {
+    response: String,
+}
+
+impl ChatInteractionResponse {
+    /// Parses the first choice from a [`ChatCompletionResponse`] to extract the
+    /// [`ChatInteractionResponse`].
+    pub fn parse_from_completion_response(
+        response: ChatCompletionResponse,
+    ) -> async_graphql::Result<Self> {
+        ensure!(
+            !response.choices.is_empty(),
+            async_graphql::Error::new(
+                "Chat completion response has an empty `choices` list".to_owned()
+            )
+        );
+
+        let first_choice = response
+            .choices
+            .into_iter()
+            .next()
+            .expect("Response should have at least one choice element");
+
+        Ok(ChatInteractionResponse {
+            response: first_choice.message.content,
+        })
+    }
+
+    /// Builds a [`ChatInteraction`] using this response and the provided `prompt`.
+    pub fn with_prompt(self, prompt: String) -> ChatInteraction {
+        ChatInteraction {
+            prompt,
+            response: self.response,
+        }
+    }
+}
