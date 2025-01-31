@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use async_graphql::{connection::EmptyFields, EmptySubscription, Schema};
 use atoma_demo::{ChatInteraction, Operation};
-use linera_sdk::{base::WithServiceAbi, bcs, Service, ServiceRuntime};
+use linera_sdk::{base::WithServiceAbi, bcs, ensure, http, Service, ServiceRuntime};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
@@ -78,4 +78,63 @@ pub struct ChatMessage {
     role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
+}
+
+impl Mutation {
+    /// Queries the Atoma network for a chat completion.
+    fn query_chat_completion(
+        &self,
+        base_url: &str,
+        api_token: &str,
+        request: &ChatCompletionRequest,
+    ) -> async_graphql::Result<ChatCompletionResponse> {
+        let mut runtime = self
+            .runtime
+            .lock()
+            .expect("Locking should never fail because service runs in a single thread");
+
+        let body = serde_json::to_vec(request)?;
+
+        let response = runtime.http_request(
+            http::Request::post(format!("{base_url}/v1/chat/completions"), body)
+                .with_header("Content-Type", b"application/json")
+                .with_header("Authorization", format!("Bearer {api_token}").as_bytes()),
+        );
+
+        ensure!(
+            response.status == 200,
+            async_graphql::Error::new(format!(
+                "Failed to perform chat completion API query. Status code: {}",
+                response.status
+            ))
+        );
+
+        serde_json::from_slice::<ChatCompletionResponse>(&response.body).map_err(|error| {
+            async_graphql::Error::new(format!(
+                "Failed to deserialize chat completion response: {error}\n{:?}",
+                String::from_utf8_lossy(&response.body),
+            ))
+        })
+    }
+}
+
+/// The POST body to be sent to the chat completion API.
+#[derive(Clone, Debug, Serialize)]
+pub struct ChatCompletionRequest<'message> {
+    stream: bool,
+    messages: &'message [&'message ChatMessage],
+    model: String,
+    max_tokens: usize,
+}
+
+/// The response received from the chat completion API.
+#[derive(Clone, Debug, Deserialize)]
+pub struct ChatCompletionResponse {
+    choices: Vec<ChatCompletionChoice>,
+}
+
+/// A choice received in the response from a chat completion API.
+#[derive(Clone, Debug, Deserialize)]
+pub struct ChatCompletionChoice {
+    message: ChatMessage,
 }

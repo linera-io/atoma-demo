@@ -267,6 +267,7 @@ dependencies = [
  "linera-sdk",
  "proptest",
  "serde",
+ "serde_json",
  "test-strategy 0.4.0",
 ]
 
