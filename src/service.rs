@@ -58,11 +58,25 @@ impl Mutation {
         &self,
         api_token: String,
         message: ChatMessage,
+        model: Option<String>,
+        max_tokens: Option<usize>,
+        atoma_proxy_url: Option<String>,
     ) -> async_graphql::Result<Vec<u8>> {
-        let interaction = ChatInteraction {
-            prompt: message.content,
-            response: "".to_owned(),
+        let request = ChatCompletionRequest {
+            stream: false,
+            messages: &[&message],
+            model: model.unwrap_or_else(|| "meta-llama/Llama-3.3-70B-Instruct".to_owned()),
+            max_tokens: max_tokens.unwrap_or(128),
         };
+
+        let response = self.query_chat_completion(
+            atoma_proxy_url.as_deref().unwrap_or(ATOMA_CLOUD_URL),
+            &api_token,
+            &request,
+        )?;
+
+        let interaction = ChatInteractionResponse::parse_from_completion_response(response)?
+            .with_prompt(message.content);
 
         Ok(
             bcs::to_bytes(&Operation::LogChatInteraction { interaction })
@@ -177,3 +191,6 @@ impl ChatInteractionResponse {
         }
     }
 }
+
+/// The base URL to access the Atoma Cloud proxy.
+const ATOMA_CLOUD_URL: &str = "https://api.atoma.network";
