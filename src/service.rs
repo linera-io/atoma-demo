@@ -4,6 +4,9 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 mod state;
+#[cfg(test)]
+#[path = "./service_unit_tests.rs"]
+mod tests;
 
 use std::sync::{Arc, Mutex};
 

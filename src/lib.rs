@@ -27,6 +27,8 @@ pub enum Operation {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, async_graphql::SimpleObject)]
 #[cfg_attr(feature = "test", derive(test_strategy::Arbitrary))]
 pub struct ChatInteraction {
+    #[cfg_attr(feature = "test", strategy("[A-Za-z0-9., ]*"))]
     pub prompt: String,
+    #[cfg_attr(feature = "test", strategy("[A-Za-z0-9., ]*"))]
     pub response: String,
 }
