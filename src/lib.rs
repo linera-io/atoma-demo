@@ -19,6 +19,12 @@ impl ServiceAbi for ApplicationAbi {
 /// Operations that the contract can execute.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
+    /// Update the set of active Atoma nodes.
+    UpdateNodes {
+        add: Vec<PublicKey>,
+        remove: Vec<PublicKey>,
+    },
+
     /// Log an interaction with the AI.
     LogChatInteraction { interaction: ChatInteraction },
 }
