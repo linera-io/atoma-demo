@@ -32,3 +32,8 @@ pub struct ChatInteraction {
     #[cfg_attr(feature = "test", strategy("[A-Za-z0-9., ]*"))]
     pub response: String,
 }
+
+/// Representation of an Atoma node's public key.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Deserialize, Serialize)]
+pub struct PublicKey([u8; 32]);
+async_graphql::scalar!(PublicKey);
