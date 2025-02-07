@@ -18,6 +18,7 @@ test-strategy = { version = "0.4.0", optional = true }
 [dev-dependencies]
 atoma-demo = { path = ".", features = ["test"] }
 linera-sdk = { git = "https://github.com/jvff/linera-protocol", rev = "26a5299", features = ["test"] }
+rand = "0.8.5"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 linera-sdk = { git = "https://github.com/jvff/linera-protocol", rev = "26a5299", features = ["test", "wasmer", "unstable-oracles"] }
