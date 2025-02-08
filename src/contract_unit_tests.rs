@@ -3,11 +3,15 @@
 
 use std::{
     collections::{BTreeSet, HashSet},
-    iter,
+    iter, panic,
 };
 
 use atoma_demo::{ChatInteraction, Operation, PublicKey};
-use linera_sdk::{base::ApplicationId, util::BlockingWait, Contract, ContractRuntime};
+use linera_sdk::{
+    base::{ApplicationId, ChainId},
+    util::BlockingWait,
+    Contract, ContractRuntime,
+};
 use proptest::{
     prelude::{Arbitrary, BoxedStrategy},
     sample::size_range,
@@ -32,6 +36,42 @@ fn updating_nodes(
         test.contract.execute_operation(operation).blocking_wait();
 
         test.check_active_atoma_nodes();
+    }
+}
+
+/// Tests if the set of active Atoma nodes can only be changed in the chain where the application
+/// was created.
+#[proptest]
+fn only_creation_chain_can_track_nodes(
+    application_id: ApplicationId<atoma_demo::ApplicationAbi>,
+    chain_id: ChainId,
+    test_operation: TestUpdateNodesOperation,
+) {
+    let result = panic::catch_unwind(move || {
+        let mut test = NodeSetTest::new(application_id).with_chain_id(chain_id);
+        let operation = test.prepare_operation(test_operation);
+
+        test.contract.execute_operation(operation).blocking_wait();
+
+        test
+    });
+
+    match result {
+        Ok(test) => {
+            assert_eq!(
+                chain_id, application_id.creation.chain_id,
+                "Contract executed `Operation::UpdateNodes` \
+                outside of the application's creation chain"
+            );
+            test.check_active_atoma_nodes();
+        }
+        Err(_panic_cause) => {
+            assert_ne!(
+                chain_id, application_id.creation.chain_id,
+                "Contract failed to execute `Operation::UpdateNodes` \
+                on the application's creation chain"
+            );
+        }
     }
 }
 
@@ -85,6 +125,12 @@ impl NodeSetTest {
             contract,
             expected_nodes: HashSet::new(),
         }
+    }
+
+    /// Changes the [`ChainId`] for the chain that executes the contract.
+    pub fn with_chain_id(mut self, chain_id: ChainId) -> Self {
+        self.contract.runtime.set_chain_id(chain_id);
+        self
     }
 
     /// Prepares an [`Operation::UpdateNodes`] based on the configured
@@ -198,4 +244,32 @@ impl Arbitrary for TestUpdateNodesOperations {
 pub struct TestUpdateNodesOperation {
     add: Vec<PublicKey>,
     remove: Vec<PublicKey>,
+}
+
+impl Arbitrary for TestUpdateNodesOperation {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    /// Creates an arbitrary [`TestUpdateNodesOperation`].
+    ///
+    /// This is done by creating a random set of nodes, and splitting it in two, one with the nodes
+    /// to add and one with the nodes to remove.
+    fn arbitrary_with((): Self::Parameters) -> Self::Strategy {
+        (..20_usize, ..20_usize)
+            .prop_flat_map(|(add_count, remove_count)| {
+                BTreeSet::<PublicKey>::arbitrary_with(size_range(add_count + remove_count).lift())
+                    .prop_map(Vec::from_iter)
+                    .prop_shuffle()
+                    .prop_map(move |mut node_keys| {
+                        let nodes_to_remove = node_keys.split_off(add_count);
+                        let nodes_to_add = node_keys;
+
+                        TestUpdateNodesOperation {
+                            add: nodes_to_add,
+                            remove: nodes_to_remove,
+                        }
+                    })
+            })
+            .boxed()
+    }
 }
