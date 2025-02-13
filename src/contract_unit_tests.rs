@@ -75,6 +75,27 @@ fn only_creation_chain_can_track_nodes(
     }
 }
 
+/// Tests if the contract rejects adding a node twice.
+#[proptest]
+fn cant_add_and_remove_node_in_the_same_operation(
+    application_id: ApplicationId<atoma_demo::ApplicationAbi>,
+    #[any(size_range(1..5).lift())] conflicting_nodes: HashSet<PublicKey>,
+    mut test_operation: TestUpdateNodesOperation,
+) {
+    let result = panic::catch_unwind(move || {
+        let mut test = NodeSetTest::new(application_id);
+
+        test_operation.add.extend(conflicting_nodes.iter().copied());
+        test_operation.remove.extend(conflicting_nodes);
+
+        let operation = test.prepare_operation(test_operation);
+
+        test.contract.execute_operation(operation).blocking_wait();
+    });
+
+    assert!(result.is_err());
+}
+
 /// Tests if chat interactions are logged on chain.
 #[proptest]
 fn chat_interactions_are_logged_on_chain(interactions: Vec<ChatInteraction>) {
