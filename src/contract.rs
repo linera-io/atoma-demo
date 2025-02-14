@@ -65,7 +65,7 @@ impl Contract for ApplicationContract {
 }
 
 /// Cross-chain messages sent privately between the application shards.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub enum Message {
     /// Request to verify a [`ChatInteraction`]'s signature.
     VerifySignature(ChatInteraction),
