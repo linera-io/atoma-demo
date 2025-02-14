@@ -15,7 +15,7 @@ fn performs_http_query(
     #[strategy("[A-Za-z0-9%=]*")] api_token: String,
     interaction: ChatInteraction,
 ) {
-    let service = setup_service();
+    let service = setup_service(ServiceRuntime::new());
 
     let prompt = &interaction.prompt;
     let request = async_graphql::Request::new(format!(
@@ -77,8 +77,6 @@ fn performs_http_query(
 }
 
 /// Creates a [`ApplicationService`] instance to be tested.
-fn setup_service() -> ApplicationService {
-    let runtime = ServiceRuntime::new();
-
+fn setup_service(runtime: ServiceRuntime<ApplicationService>) -> ApplicationService {
     ApplicationService::new(runtime).blocking_wait()
 }
