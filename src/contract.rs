@@ -14,6 +14,7 @@ use linera_sdk::{
     views::{RootView, View},
     Contract, ContractRuntime,
 };
+use serde::{Deserialize, Serialize};
 
 use self::state::Application;
 
@@ -29,7 +30,7 @@ impl WithContractAbi for ApplicationContract {
 }
 
 impl Contract for ApplicationContract {
-    type Message = ();
+    type Message = Message;
     type Parameters = ();
     type InstantiationArgument = ();
 
@@ -49,11 +50,28 @@ impl Contract for ApplicationContract {
         }
     }
 
-    async fn execute_message(&mut self, _message: Self::Message) {}
+    async fn execute_message(&mut self, message: Self::Message) {
+        match message {
+            Message::VerifySignature(interaction) => self.verify_signature(interaction),
+            Message::LogVerifiedChatInteraction(interaction) => {
+                self.log_verified_chat_interaction(interaction)
+            }
+        }
+    }
 
     async fn store(mut self) {
         self.state.save().await.expect("Failed to save state");
     }
+}
+
+/// Cross-chain messages sent privately between the application shards.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum Message {
+    /// Request to verify a [`ChatInteraction`]'s signature.
+    VerifySignature(ChatInteraction),
+
+    /// Response indicating that the [`ChatInteraction`]'s signature was verified and approved.
+    LogVerifiedChatInteraction(ChatInteraction),
 }
 
 impl ApplicationContract {
@@ -98,9 +116,36 @@ impl ApplicationContract {
         );
     }
 
-    /// Handles an [`Operation::LogChatInteraction`] by adding a [`ChatInteraction`] to the chat
-    /// log.
+    /// Handles an [`Operation::LogChatInteraction`] by requesting the [`ChatInteraction`]'s
+    /// signature to be verified.
     fn log_chat_interaction(&mut self, interaction: ChatInteraction) {
+        let creation_chain_id = self.runtime.application_id().creation.chain_id;
+
+        self.runtime
+            .send_message(creation_chain_id, Message::VerifySignature(interaction));
+    }
+
+    /// Handles a [`Message::VerifySignature`] by verifying the signature and if accepted,
+    /// responding with a [`Message::LogVerifiedChatInteraction`].
+    fn verify_signature(&mut self, interaction: ChatInteraction) {
+        let requester_chain_id = self
+            .runtime
+            .message_id()
+            .expect(
+                "`verify_signature` should only be called \
+                when handling a `Message::VerifySignature`",
+            )
+            .chain_id;
+
+        self.runtime.send_message(
+            requester_chain_id,
+            Message::LogVerifiedChatInteraction(interaction),
+        );
+    }
+
+    /// Handles a [`Message::LogVerifiedChatInteraction`] by adding the [`ChatInteraction`] to the
+    /// chat log.
+    fn log_verified_chat_interaction(&mut self, interaction: ChatInteraction) {
         self.state.chat_log.push(interaction);
     }
 }
