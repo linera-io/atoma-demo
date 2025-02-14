@@ -57,7 +57,10 @@ async fn service_queries_atoma() {
 
     let Operation::LogChatInteraction {
         interaction: ChatInteraction { response, .. },
-    } = operation;
+    } = operation
+    else {
+        panic!("Unexpected operation returned from service");
+    };
 
     assert!(response.contains("Rio de Janeiro"));
 }

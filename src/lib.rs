@@ -19,6 +19,12 @@ impl ServiceAbi for ApplicationAbi {
 /// Operations that the contract can execute.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
+    /// Update the set of active Atoma nodes.
+    UpdateNodes {
+        add: Vec<PublicKey>,
+        remove: Vec<PublicKey>,
+    },
+
     /// Log an interaction with the AI.
     LogChatInteraction { interaction: ChatInteraction },
 }
@@ -32,3 +38,9 @@ pub struct ChatInteraction {
     #[cfg_attr(feature = "test", strategy("[A-Za-z0-9., ]*"))]
     pub response: String,
 }
+
+/// Representation of an Atoma node's public key.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Deserialize, Serialize)]
+#[cfg_attr(feature = "test", derive(test_strategy::Arbitrary))]
+pub struct PublicKey([u8; 32]);
+async_graphql::scalar!(PublicKey);

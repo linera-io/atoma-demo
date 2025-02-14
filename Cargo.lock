@@ -266,6 +266,7 @@ dependencies = [
  "atoma-demo",
  "linera-sdk",
  "proptest",
+ "rand",
  "serde",
  "serde_json",
  "test-log",
