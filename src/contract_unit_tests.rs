@@ -20,7 +20,7 @@ use proptest::{
 use rand::Rng;
 use test_strategy::proptest;
 
-use super::ApplicationContract;
+use super::{ApplicationContract, Message};
 
 /// Tests if nodes can be added to and removed from the set of active Atoma nodes.
 #[proptest]
@@ -98,12 +98,12 @@ fn cant_add_and_remove_node_in_the_same_operation(
 
 /// Tests if chat interactions are logged on chain.
 #[proptest]
-fn chat_interactions_are_logged_on_chain(interactions: Vec<ChatInteraction>) {
+fn verified_chat_interactions_are_logged_on_chain(interactions: Vec<ChatInteraction>) {
     let mut contract = setup_contract();
 
     for interaction in interactions.clone() {
         contract
-            .execute_operation(Operation::LogChatInteraction { interaction })
+            .execute_message(Message::LogVerifiedChatInteraction(interaction))
             .blocking_wait();
     }
 
