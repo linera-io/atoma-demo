@@ -1,7 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use atoma_demo::{ChatInteraction, Operation};
+use std::collections::HashSet;
+
+use atoma_demo::{ChatInteraction, Operation, PublicKey};
 use linera_sdk::{
     bcs, http,
     util::BlockingWait,
@@ -69,6 +71,71 @@ fn read_chat_log(interactions: Vec<ChatInteraction>) {
         .collect::<Vec<_>>();
 
     assert_eq!(persisted_interactions, interactions);
+}
+
+/// Tests if the set of active Atoma nodes stored on chain can be inspected with GraphQL.
+#[proptest]
+fn read_active_atoma_nodes(nodes: HashSet<PublicKey>) {
+    let runtime = ServiceRuntime::new();
+    let storage = runtime.key_value_store().to_mut();
+
+    let mut initial_state = Application::load(ViewStorageContext::new_unsafe(storage, vec![], ()))
+        .blocking_wait()
+        .expect("Failed to load state from mock storage");
+
+    for node in &nodes {
+        initial_state
+            .active_atoma_nodes
+            .insert(node)
+            .expect("Failed to insert node key in initial state");
+    }
+
+    initial_state
+        .save()
+        .blocking_wait()
+        .expect("Failed to save initial state to mock storage");
+
+    let service = setup_service(runtime);
+
+    let request = async_graphql::Request::new("query { activeAtomaNodes }");
+
+    let response = service.handle_query(request).blocking_wait();
+
+    let async_graphql::Value::Object(ref response_data) = response.data else {
+        panic!("Unexpected response data type");
+    };
+    let async_graphql::Value::List(ref active_nodes) = response_data["activeAtomaNodes"] else {
+        panic!("Unexpected active atoma nodes set type");
+    };
+
+    let persisted_nodes = active_nodes
+        .iter()
+        .map(|node_value| {
+            let async_graphql::Value::List(byte_list) = node_value else {
+                panic!("Unexpected node entry type");
+            };
+
+            let bytes = byte_list
+                .iter()
+                .map(|byte_value| {
+                    let async_graphql::Value::Number(byte_number) = byte_value else {
+                        panic!("Unexpected node key byte type");
+                    };
+                    let byte = byte_number.as_u64().expect("Invalid value for a byte");
+
+                    u8::try_from(byte).expect("Invalid integer for a byte")
+                })
+                .collect::<Vec<u8>>();
+
+            let byte_array =
+                <[u8; 32]>::try_from(&*bytes).expect("Invalid number of bytes for a public key");
+
+            PublicKey::from(byte_array)
+        })
+        .map(PublicKey::from)
+        .collect::<HashSet<_>>();
+
+    assert_eq!(persisted_nodes, nodes);
 }
 
 /// Tests if `chat` mutations perform an HTTP request to the Atoma proxy, and generates the
