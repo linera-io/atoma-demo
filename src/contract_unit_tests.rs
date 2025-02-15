@@ -8,9 +8,9 @@ use std::{
 
 use atoma_demo::{ChatInteraction, Operation, PublicKey};
 use linera_sdk::{
-    base::{ApplicationId, ChainId},
+    base::{ApplicationId, ChainId, Destination},
     util::BlockingWait,
-    Contract, ContractRuntime,
+    Contract, ContractRuntime, Resources, SendMessageRequest,
 };
 use proptest::{
     prelude::{Arbitrary, BoxedStrategy},
@@ -20,7 +20,7 @@ use proptest::{
 use rand::Rng;
 use test_strategy::proptest;
 
-use super::ApplicationContract;
+use super::{ApplicationContract, Message};
 
 /// Tests if nodes can be added to and removed from the set of active Atoma nodes.
 #[proptest]
@@ -96,14 +96,45 @@ fn cant_add_and_remove_node_in_the_same_operation(
     assert!(result.is_err());
 }
 
+/// Tests if chat interactions are requested to be verified.
+#[proptest]
+fn chat_interaction_is_requested_to_be_verified(
+    application_id: ApplicationId<atoma_demo::ApplicationAbi>,
+    interaction: ChatInteraction,
+) {
+    let mut contract = setup_contract();
+
+    contract.runtime.set_application_id(application_id);
+
+    contract
+        .execute_operation(Operation::LogChatInteraction {
+            interaction: interaction.clone(),
+        })
+        .blocking_wait();
+
+    let messages = contract.runtime.created_send_message_requests();
+
+    assert_eq!(messages.len(), 1);
+    assert_eq!(
+        messages[0],
+        SendMessageRequest {
+            destination: Destination::Recipient(application_id.creation.chain_id),
+            authenticated: false,
+            is_tracked: false,
+            grant: Resources::default(),
+            message: Message::VerifySignature(interaction),
+        }
+    );
+}
+
 /// Tests if chat interactions are logged on chain.
 #[proptest]
-fn chat_interactions_are_logged_on_chain(interactions: Vec<ChatInteraction>) {
+fn verified_chat_interactions_are_logged_on_chain(interactions: Vec<ChatInteraction>) {
     let mut contract = setup_contract();
 
     for interaction in interactions.clone() {
         contract
-            .execute_operation(Operation::LogChatInteraction { interaction })
+            .execute_message(Message::LogVerifiedChatInteraction(interaction))
             .blocking_wait();
     }
 
