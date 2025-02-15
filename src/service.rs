@@ -10,14 +10,17 @@ mod tests;
 
 use std::sync::{Arc, Mutex};
 
-use async_graphql::{connection::EmptyFields, EmptySubscription, Schema};
+use async_graphql::{EmptySubscription, Schema};
 use atoma_demo::{ChatInteraction, Operation};
-use linera_sdk::{base::WithServiceAbi, bcs, ensure, http, Service, ServiceRuntime};
+use linera_sdk::{base::WithServiceAbi, bcs, ensure, http, views::View, Service, ServiceRuntime};
 use serde::{Deserialize, Serialize};
+
+use self::state::Application;
 
 #[derive(Clone)]
 pub struct ApplicationService {
     runtime: Arc<Mutex<ServiceRuntime<Self>>>,
+    state: Arc<Application>,
 }
 
 linera_sdk::service!(ApplicationService);
@@ -30,14 +33,19 @@ impl Service for ApplicationService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
+        let state = Application::load(runtime.root_view_storage_context())
+            .await
+            .expect("Failed to load state");
+
         ApplicationService {
             runtime: Arc::new(Mutex::new(runtime)),
+            state: Arc::new(state),
         }
     }
 
     async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse {
         Schema::build(
-            EmptyFields,
+            self.state.clone(),
             Mutation {
                 runtime: self.runtime.clone(),
             },

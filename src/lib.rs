@@ -44,3 +44,9 @@ pub struct ChatInteraction {
 #[cfg_attr(feature = "test", derive(test_strategy::Arbitrary))]
 pub struct PublicKey([u8; 32]);
 async_graphql::scalar!(PublicKey);
+
+impl From<[u8; 32]> for PublicKey {
+    fn from(bytes: [u8; 32]) -> Self {
+        PublicKey(bytes)
+    }
+}

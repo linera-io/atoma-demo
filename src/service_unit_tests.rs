@@ -1,12 +1,142 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use atoma_demo::{ChatInteraction, Operation};
-use linera_sdk::{bcs, http, util::BlockingWait, Service, ServiceRuntime};
+use std::collections::HashSet;
+
+use atoma_demo::{ChatInteraction, Operation, PublicKey};
+use linera_sdk::{
+    bcs, http,
+    util::BlockingWait,
+    views::{RootView, View},
+    Service, ServiceRuntime, ViewStorageContext,
+};
 use serde_json::json;
 use test_strategy::proptest;
 
-use super::{ApplicationService, ATOMA_CLOUD_URL};
+use super::{state::Application, ApplicationService, ATOMA_CLOUD_URL};
+
+/// Tests if the chat logged on chain can be inspected with GraphQL.
+#[proptest]
+fn read_chat_log(interactions: Vec<ChatInteraction>) {
+    let runtime = ServiceRuntime::new();
+    let storage = runtime.key_value_store().to_mut();
+
+    let mut initial_state = Application::load(ViewStorageContext::new_unsafe(storage, vec![], ()))
+        .blocking_wait()
+        .expect("Failed to load state from mock storage");
+
+    for interaction in interactions.iter().cloned() {
+        initial_state.chat_log.push(interaction);
+    }
+
+    initial_state
+        .save()
+        .blocking_wait()
+        .expect("Failed to save initial state to mock storage");
+
+    let service = setup_service(runtime);
+
+    let request = async_graphql::Request::new("query { chatLog { entries { prompt, response } } }");
+
+    let response = service.handle_query(request).blocking_wait();
+
+    let async_graphql::Value::Object(response_data) = response.data else {
+        panic!("Unexpected response data type");
+    };
+    let async_graphql::Value::Object(ref chat_log) = response_data["chatLog"] else {
+        panic!("Unexpected response chat log type");
+    };
+    let async_graphql::Value::List(ref entries) = chat_log["entries"] else {
+        panic!("Unexpected response entries type");
+    };
+
+    let persisted_interactions = entries
+        .iter()
+        .map(|entry_value| {
+            let async_graphql::Value::Object(entry) = entry_value else {
+                panic!("Unexpected interaction entry type");
+            };
+            let async_graphql::Value::String(ref prompt) = entry["prompt"] else {
+                panic!("Unexpected interaction prompt type");
+            };
+            let async_graphql::Value::String(ref response) = entry["response"] else {
+                panic!("Unexpected interaction response type");
+            };
+
+            ChatInteraction {
+                prompt: prompt.clone(),
+                response: response.clone(),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(persisted_interactions, interactions);
+}
+
+/// Tests if the set of active Atoma nodes stored on chain can be inspected with GraphQL.
+#[proptest]
+fn read_active_atoma_nodes(nodes: HashSet<PublicKey>) {
+    let runtime = ServiceRuntime::new();
+    let storage = runtime.key_value_store().to_mut();
+
+    let mut initial_state = Application::load(ViewStorageContext::new_unsafe(storage, vec![], ()))
+        .blocking_wait()
+        .expect("Failed to load state from mock storage");
+
+    for node in &nodes {
+        initial_state
+            .active_atoma_nodes
+            .insert(node)
+            .expect("Failed to insert node key in initial state");
+    }
+
+    initial_state
+        .save()
+        .blocking_wait()
+        .expect("Failed to save initial state to mock storage");
+
+    let service = setup_service(runtime);
+
+    let request = async_graphql::Request::new("query { activeAtomaNodes }");
+
+    let response = service.handle_query(request).blocking_wait();
+
+    let async_graphql::Value::Object(ref response_data) = response.data else {
+        panic!("Unexpected response data type");
+    };
+    let async_graphql::Value::List(ref active_nodes) = response_data["activeAtomaNodes"] else {
+        panic!("Unexpected active atoma nodes set type");
+    };
+
+    let persisted_nodes = active_nodes
+        .iter()
+        .map(|node_value| {
+            let async_graphql::Value::List(byte_list) = node_value else {
+                panic!("Unexpected node entry type");
+            };
+
+            let bytes = byte_list
+                .iter()
+                .map(|byte_value| {
+                    let async_graphql::Value::Number(byte_number) = byte_value else {
+                        panic!("Unexpected node key byte type");
+                    };
+                    let byte = byte_number.as_u64().expect("Invalid value for a byte");
+
+                    u8::try_from(byte).expect("Invalid integer for a byte")
+                })
+                .collect::<Vec<u8>>();
+
+            let byte_array =
+                <[u8; 32]>::try_from(&*bytes).expect("Invalid number of bytes for a public key");
+
+            PublicKey::from(byte_array)
+        })
+        .map(PublicKey::from)
+        .collect::<HashSet<_>>();
+
+    assert_eq!(persisted_nodes, nodes);
+}
 
 /// Tests if `chat` mutations perform an HTTP request to the Atoma proxy, and generates the
 /// operation to log a chat interaction.
@@ -15,7 +145,7 @@ fn performs_http_query(
     #[strategy("[A-Za-z0-9%=]*")] api_token: String,
     interaction: ChatInteraction,
 ) {
-    let service = setup_service();
+    let service = setup_service(ServiceRuntime::new());
 
     let prompt = &interaction.prompt;
     let request = async_graphql::Request::new(format!(
@@ -77,8 +207,6 @@ fn performs_http_query(
 }
 
 /// Creates a [`ApplicationService`] instance to be tested.
-fn setup_service() -> ApplicationService {
-    let runtime = ServiceRuntime::new();
-
+fn setup_service(runtime: ServiceRuntime<ApplicationService>) -> ApplicationService {
     ApplicationService::new(runtime).blocking_wait()
 }
