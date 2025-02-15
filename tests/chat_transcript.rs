@@ -5,7 +5,7 @@
 
 use std::env;
 
-use atoma_demo::{ApplicationAbi, ChatInteraction, Operation};
+use atoma_demo::{ApplicationAbi, ChatInteraction, Operation, PublicKey};
 use linera_sdk::{bcs, test::TestValidator};
 
 /// Tests if the service queries the Atoma network when handling a `chat` mutation.
@@ -63,4 +63,81 @@ async fn service_queries_atoma() {
     };
 
     assert!(response.contains("Rio de Janeiro"));
+}
+
+/// Tests if a chat interaction is verified on the creation chain and logged on the requesting
+/// chain.
+#[test_log::test(tokio::test)]
+async fn chat_interaction_verification_and_logging() {
+    let (validator, application_id, creation_chain) =
+        TestValidator::with_current_application::<ApplicationAbi, _, _>((), ()).await;
+
+    let fake_node = PublicKey::from([0_u8; 32]);
+    let chat_prompt = "What is one plus one?";
+    let chat_response = "2";
+
+    creation_chain
+        .add_block(|block| {
+            block.with_operation(
+                application_id,
+                Operation::UpdateNodes {
+                    add: vec![fake_node],
+                    remove: vec![],
+                },
+            );
+        })
+        .await;
+
+    let chat_chain = validator.new_chain().await;
+
+    chat_chain.register_application(application_id).await;
+
+    let request_certificate = chat_chain
+        .add_block(|block| {
+            block.with_operation(
+                application_id,
+                Operation::LogChatInteraction {
+                    interaction: ChatInteraction {
+                        prompt: chat_prompt.to_owned(),
+                        response: chat_response.to_owned(),
+                    },
+                },
+            );
+        })
+        .await;
+
+    let verification_certificate = creation_chain
+        .add_block(|block| {
+            block.with_messages_from(&request_certificate);
+        })
+        .await;
+
+    chat_chain
+        .add_block(|block| {
+            block.with_messages_from(&verification_certificate);
+        })
+        .await;
+
+    let response = chat_chain
+        .graphql_query(
+            application_id,
+            "query { chatLog { entries { prompt, response } } }",
+        )
+        .await;
+
+    assert_eq!(
+        response.to_string(),
+        format!(
+            "{{\
+            \"chatLog\":{{\
+                \"entries\":[\
+                    {{\
+                        \"prompt\":{chat_prompt:?},\
+                        \"response\":{chat_response:?}\
+                    }}\
+                ]\
+            }}\
+        }}"
+        )
+    );
 }
