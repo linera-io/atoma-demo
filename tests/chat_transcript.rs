@@ -90,8 +90,6 @@ async fn chat_interaction_verification_and_logging() {
 
     let chat_chain = validator.new_chain().await;
 
-    chat_chain.register_application(application_id).await;
-
     let request_certificate = chat_chain
         .add_block(|block| {
             block.with_operation(
