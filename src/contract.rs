@@ -10,7 +10,7 @@ mod tests;
 
 use atoma_demo::{ChatInteraction, Operation, PublicKey};
 use linera_sdk::{
-    base::WithContractAbi,
+    linera_base_types::WithContractAbi,
     views::{RootView, View},
     Contract, ContractRuntime,
 };

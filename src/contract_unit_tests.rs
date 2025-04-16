@@ -8,7 +8,7 @@ use std::{
 
 use atoma_demo::{ChatInteraction, Operation, PublicKey};
 use linera_sdk::{
-    base::{ApplicationId, ChainId, Destination},
+    linera_base_types::{ApplicationId, ChainId, Destination},
     util::BlockingWait,
     Contract, ContractRuntime, Resources, SendMessageRequest,
 };

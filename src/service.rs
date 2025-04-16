@@ -12,7 +12,9 @@ use std::sync::{Arc, Mutex};
 
 use async_graphql::{EmptySubscription, Schema};
 use atoma_demo::{ChatInteraction, Operation};
-use linera_sdk::{base::WithServiceAbi, bcs, ensure, http, views::View, Service, ServiceRuntime};
+use linera_sdk::{
+    bcs, ensure, http, linera_base_types::WithServiceAbi, views::View, Service, ServiceRuntime,
+};
 use serde::{Deserialize, Serialize};
 
 use self::state::Application;

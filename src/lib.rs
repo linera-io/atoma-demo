@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_sdk::base::{ContractAbi, ServiceAbi};
+use linera_sdk::linera_base_types::{ContractAbi, ServiceAbi};
 use serde::{Deserialize, Serialize};
 
 pub struct ApplicationAbi;
