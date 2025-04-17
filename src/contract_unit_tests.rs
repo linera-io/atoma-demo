@@ -8,7 +8,7 @@ use std::{
 
 use atoma_demo::{ChatInteraction, Operation, PublicKey};
 use linera_sdk::{
-    base::{ApplicationId, ChainId, Destination},
+    linera_base_types::{ApplicationId, ChainId, Destination},
     util::BlockingWait,
     Contract, ContractRuntime, Resources, SendMessageRequest,
 };
@@ -26,9 +26,10 @@ use super::{ApplicationContract, Message};
 #[proptest]
 fn updating_nodes(
     application_id: ApplicationId<atoma_demo::ApplicationAbi>,
+    creator_chain_id: ChainId,
     test_operations: TestUpdateNodesOperations,
 ) {
-    let mut test = NodeSetTest::new(application_id);
+    let mut test = NodeSetTest::new(application_id, creator_chain_id);
 
     for test_operation in test_operations.0 {
         let operation = test.prepare_operation(test_operation);
@@ -44,11 +45,12 @@ fn updating_nodes(
 #[proptest]
 fn only_creation_chain_can_track_nodes(
     application_id: ApplicationId<atoma_demo::ApplicationAbi>,
+    creator_chain_id: ChainId,
     chain_id: ChainId,
     test_operation: TestUpdateNodesOperation,
 ) {
     let result = panic::catch_unwind(move || {
-        let mut test = NodeSetTest::new(application_id).with_chain_id(chain_id);
+        let mut test = NodeSetTest::new(application_id, creator_chain_id).with_chain_id(chain_id);
         let operation = test.prepare_operation(test_operation);
 
         test.contract.execute_operation(operation).blocking_wait();
@@ -59,7 +61,7 @@ fn only_creation_chain_can_track_nodes(
     match result {
         Ok(test) => {
             assert_eq!(
-                chain_id, application_id.creation.chain_id,
+                chain_id, creator_chain_id,
                 "Contract executed `Operation::UpdateNodes` \
                 outside of the application's creation chain"
             );
@@ -67,7 +69,7 @@ fn only_creation_chain_can_track_nodes(
         }
         Err(_panic_cause) => {
             assert_ne!(
-                chain_id, application_id.creation.chain_id,
+                chain_id, creator_chain_id,
                 "Contract failed to execute `Operation::UpdateNodes` \
                 on the application's creation chain"
             );
@@ -79,11 +81,12 @@ fn only_creation_chain_can_track_nodes(
 #[proptest]
 fn cant_add_and_remove_node_in_the_same_operation(
     application_id: ApplicationId<atoma_demo::ApplicationAbi>,
+    creator_chain_id: ChainId,
     #[any(size_range(1..5).lift())] conflicting_nodes: HashSet<PublicKey>,
     mut test_operation: TestUpdateNodesOperation,
 ) {
     let result = panic::catch_unwind(move || {
-        let mut test = NodeSetTest::new(application_id);
+        let mut test = NodeSetTest::new(application_id, creator_chain_id);
 
         test_operation.add.extend(conflicting_nodes.iter().copied());
         test_operation.remove.extend(conflicting_nodes);
@@ -100,11 +103,15 @@ fn cant_add_and_remove_node_in_the_same_operation(
 #[proptest]
 fn chat_interaction_is_requested_to_be_verified(
     application_id: ApplicationId<atoma_demo::ApplicationAbi>,
+    creator_chain_id: ChainId,
     interaction: ChatInteraction,
 ) {
     let mut contract = setup_contract();
 
-    contract.runtime.set_application_id(application_id);
+    contract
+        .runtime
+        .set_application_id(application_id)
+        .set_application_creator_chain_id(creator_chain_id);
 
     contract
         .execute_operation(Operation::LogChatInteraction {
@@ -118,7 +125,7 @@ fn chat_interaction_is_requested_to_be_verified(
     assert_eq!(
         messages[0],
         SendMessageRequest {
-            destination: Destination::Recipient(application_id.creation.chain_id),
+            destination: Destination::Recipient(creator_chain_id),
             authenticated: false,
             is_tracked: false,
             grant: Resources::default(),
@@ -166,12 +173,17 @@ impl NodeSetTest {
     ///
     /// The test configures the contract to run on the specified `chain_id`, or on the
     /// application's creation chain if it's [`None`].
-    pub fn new(application_id: ApplicationId<atoma_demo::ApplicationAbi>) -> Self {
+    pub fn new(
+        application_id: ApplicationId<atoma_demo::ApplicationAbi>,
+        creator_chain_id: ChainId,
+    ) -> Self {
         let mut contract = setup_contract();
-        let chain_id = application_id.creation.chain_id;
 
-        contract.runtime.set_application_id(application_id);
-        contract.runtime.set_chain_id(chain_id);
+        contract
+            .runtime
+            .set_application_id(application_id)
+            .set_chain_id(creator_chain_id)
+            .set_application_creator_chain_id(creator_chain_id);
 
         NodeSetTest {
             contract,
@@ -255,9 +267,8 @@ impl Arbitrary for TestUpdateNodesOperations {
                     .prop_shuffle();
 
                 node_keys.prop_perturb(move |node_keys, mut random| {
-                    let mut add_operations = iter::repeat(vec![])
-                        .take(operation_count)
-                        .collect::<Vec<_>>();
+                    let mut add_operations =
+                        iter::repeat_n(vec![], operation_count).collect::<Vec<_>>();
                     let mut remove_operations = add_operations.clone();
 
                     for node_key in node_keys {

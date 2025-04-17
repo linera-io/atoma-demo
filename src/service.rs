@@ -8,18 +8,20 @@ mod state;
 #[path = "./service_unit_tests.rs"]
 mod tests;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Schema};
 use atoma_demo::{ChatInteraction, Operation};
-use linera_sdk::{base::WithServiceAbi, bcs, ensure, http, views::View, Service, ServiceRuntime};
+use linera_sdk::{
+    bcs, ensure, http, linera_base_types::WithServiceAbi, views::View, Service, ServiceRuntime,
+};
 use serde::{Deserialize, Serialize};
 
 use self::state::Application;
 
 #[derive(Clone)]
 pub struct ApplicationService {
-    runtime: Arc<Mutex<ServiceRuntime<Self>>>,
+    runtime: Arc<ServiceRuntime<Self>>,
     state: Arc<Application>,
 }
 
@@ -38,7 +40,7 @@ impl Service for ApplicationService {
             .expect("Failed to load state");
 
         ApplicationService {
-            runtime: Arc::new(Mutex::new(runtime)),
+            runtime: Arc::new(runtime),
             state: Arc::new(state),
         }
     }
@@ -59,7 +61,7 @@ impl Service for ApplicationService {
 
 /// Root type that defines all the GraphQL mutations available from the service.
 pub struct Mutation {
-    runtime: Arc<Mutex<ServiceRuntime<ApplicationService>>>,
+    runtime: Arc<ServiceRuntime<ApplicationService>>,
 }
 
 #[async_graphql::Object]
@@ -113,14 +115,9 @@ impl Mutation {
         api_token: &str,
         request: &ChatCompletionRequest,
     ) -> async_graphql::Result<ChatCompletionResponse> {
-        let mut runtime = self
-            .runtime
-            .lock()
-            .expect("Locking should never fail because service runs in a single thread");
-
         let body = serde_json::to_vec(request)?;
 
-        let response = runtime.http_request(
+        let response = self.runtime.http_request(
             http::Request::post(format!("{base_url}/v1/chat/completions"), body)
                 .with_header("Content-Type", b"application/json")
                 .with_header("Authorization", format!("Bearer {api_token}").as_bytes()),

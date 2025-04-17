@@ -10,7 +10,7 @@ mod tests;
 
 use atoma_demo::{ChatInteraction, Operation, PublicKey};
 use linera_sdk::{
-    base::WithContractAbi,
+    linera_base_types::WithContractAbi,
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -31,6 +31,7 @@ impl WithContractAbi for ApplicationContract {
 
 impl Contract for ApplicationContract {
     type Message = Message;
+    type EventValue = ();
     type Parameters = ();
     type InstantiationArgument = ();
 
@@ -79,7 +80,7 @@ impl ApplicationContract {
     /// `nodes_to_remove`.
     fn update_nodes(&mut self, nodes_to_add: Vec<PublicKey>, nodes_to_remove: Vec<PublicKey>) {
         assert!(
-            self.runtime.chain_id() == self.runtime.application_id().creation.chain_id,
+            self.runtime.chain_id() == self.runtime.application_creator_chain_id(),
             "Only the chain that created the application can manage the set of active nodes"
         );
 
@@ -119,7 +120,7 @@ impl ApplicationContract {
     /// Handles an [`Operation::LogChatInteraction`] by requesting the [`ChatInteraction`]'s
     /// signature to be verified.
     fn log_chat_interaction(&mut self, interaction: ChatInteraction) {
-        let creation_chain_id = self.runtime.application_id().creation.chain_id;
+        let creation_chain_id = self.runtime.application_creator_chain_id();
 
         self.runtime
             .send_message(creation_chain_id, Message::VerifySignature(interaction));

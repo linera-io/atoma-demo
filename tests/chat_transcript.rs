@@ -6,7 +6,10 @@
 use std::env;
 
 use atoma_demo::{ApplicationAbi, ChatInteraction, Operation, PublicKey};
-use linera_sdk::{bcs, test::TestValidator};
+use linera_sdk::{
+    bcs,
+    test::{QueryOutcome, TestValidator},
+};
 
 /// Tests if the service queries the Atoma network when handling a `chat` mutation.
 #[test_log::test(tokio::test)]
@@ -29,7 +32,7 @@ async fn service_queries_atoma() {
         }}"
     );
 
-    let response = chain.graphql_query(application_id, query).await;
+    let QueryOutcome { response, .. } = chain.graphql_query(application_id, query).await;
 
     let response_object = response
         .as_object()
@@ -90,8 +93,6 @@ async fn chat_interaction_verification_and_logging() {
 
     let chat_chain = validator.new_chain().await;
 
-    chat_chain.register_application(application_id).await;
-
     let request_certificate = chat_chain
         .add_block(|block| {
             block.with_operation(
@@ -118,7 +119,7 @@ async fn chat_interaction_verification_and_logging() {
         })
         .await;
 
-    let response = chat_chain
+    let QueryOutcome { response, .. } = chat_chain
         .graphql_query(
             application_id,
             "query { chatLog { entries { prompt, response } } }",
