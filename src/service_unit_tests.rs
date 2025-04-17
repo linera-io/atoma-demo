@@ -132,7 +132,6 @@ fn read_active_atoma_nodes(nodes: HashSet<PublicKey>) {
 
             PublicKey::from(byte_array)
         })
-        .map(PublicKey::from)
         .collect::<HashSet<_>>();
 
     assert_eq!(persisted_nodes, nodes);
