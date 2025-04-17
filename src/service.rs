@@ -115,7 +115,7 @@ impl Mutation {
         api_token: &str,
         request: &ChatCompletionRequest,
     ) -> async_graphql::Result<ChatCompletionResponse> {
-        let mut runtime = self
+        let runtime = self
             .runtime
             .lock()
             .expect("Locking should never fail because service runs in a single thread");
