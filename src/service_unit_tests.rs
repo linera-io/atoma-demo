@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
 use atoma_demo::{ChatInteraction, Operation, PublicKey};
 use linera_sdk::{
@@ -145,7 +145,7 @@ fn performs_http_query(
     #[strategy("[A-Za-z0-9%=]*")] api_token: String,
     interaction: ChatInteraction,
 ) {
-    let service = setup_service(ServiceRuntime::new());
+    let mut service = setup_service(ServiceRuntime::new());
 
     let prompt = &interaction.prompt;
     let request = async_graphql::Request::new(format!(
@@ -184,15 +184,17 @@ fn performs_http_query(
         interaction.response
     );
 
-    service.runtime.lock().unwrap().add_expected_http_request(
-        http::Request::post(
-            format!("{ATOMA_CLOUD_URL}/v1/chat/completions"),
-            expected_body,
-        )
-        .with_header("Content-Type", b"application/json")
-        .with_header("Authorization", format!("Bearer {api_token}").as_bytes()),
-        http::Response::ok(mock_response),
-    );
+    Arc::get_mut(&mut service.runtime)
+        .expect("`ServiceRuntime` should not be shared before configuring expected HTTP requests")
+        .add_expected_http_request(
+            http::Request::post(
+                format!("{ATOMA_CLOUD_URL}/v1/chat/completions"),
+                expected_body,
+            )
+            .with_header("Content-Type", b"application/json")
+            .with_header("Authorization", format!("Bearer {api_token}").as_bytes()),
+            http::Response::ok(mock_response),
+        );
 
     let response = service.handle_query(request).blocking_wait();
 

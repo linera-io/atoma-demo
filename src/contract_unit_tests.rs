@@ -267,9 +267,8 @@ impl Arbitrary for TestUpdateNodesOperations {
                     .prop_shuffle();
 
                 node_keys.prop_perturb(move |node_keys, mut random| {
-                    let mut add_operations = iter::repeat(vec![])
-                        .take(operation_count)
-                        .collect::<Vec<_>>();
+                    let mut add_operations =
+                        iter::repeat_n(vec![], operation_count).collect::<Vec<_>>();
                     let mut remove_operations = add_operations.clone();
 
                     for node_key in node_keys {
